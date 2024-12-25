@@ -69,7 +69,7 @@ Finally, type `sh train.sh` in the console. Wating for the training ends~
 ## Testing (to reproduce, optional)
 Similar to fine-tuning, prepare `test.sh` as below:
 ```
-python inference.py \
+python official_test.py \
  --data_path ScImpactPredict/NAID/NAID_test_extrainfo.csv \
  --weight_dir path_to_runs_dir
 ```

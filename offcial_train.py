@@ -101,7 +101,7 @@ def main(args):
     train_size = int(0.9 * total_size)
     val_size = total_size - train_size
     train_dataset, val_dataset = random_split(total_dataset, [train_size, val_size])
-    test_dataset = TextDataset(df_test, tokenizer, args.max_length)
+    test_dataset = TextDataset(df_test, tokenizer, args.max_length) # DO NOT USE FOR PARAMETER SEARCHING
 
     # Prepare Accelerator
     accelerator = Accelerator()
@@ -171,7 +171,6 @@ def get_args():
                         help='Directory for storing TensorBoard logs and model checkpoints')
 
     # Dataset and training configuration
-    parser.add_argument('--batch_size', type=int, default=16, help='Batch size for training and validation')
     parser.add_argument('--total_epochs', type=int, default=5, help='Total number of epochs to train')
     parser.add_argument('--base_lr', type=float, default=5e-5, help='Base learning rate for the optimizer')
     parser.add_argument('--learning_rate', type=float, default=1e-4, help='Learning rate for the optimizer')
