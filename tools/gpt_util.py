@@ -1,21 +1,11 @@
 # https://api.chatanywhere.cn
 import os
 
-import openai
-from langchain.chains.llm import LLMChain
 from langchain_community.chat_models.openai import ChatOpenAI
-from langchain_core.prompts import PromptTemplate
-from openai import OpenAI
 from retry import retry
-
-from config.config import openai_key
 
 # openai.api_base = "https://api.chatanywhere.com.cn"
 # openai.api_key = openai_key
-API_SECRET_KEY = "xxx"
-BASE_URL = "xxx"
-os.environ["OPENAI_API_KEY"] = API_SECRET_KEY
-os.environ["OPENAI_API_BASE"] = BASE_URL
 from langchain_core.messages import HumanMessage, SystemMessage, AIMessage
 from langchain_openai import ChatOpenAI
 
@@ -34,7 +24,7 @@ def _get_ref_list(text):
     ]
 
     chat = ChatOpenAI(model="gpt-3.5-turbo")
-    chat.invoke(messages)
+
 
     return chat.batch([messages])[0].content
 
@@ -52,34 +42,11 @@ def get_chatgpt_keyword(title, abstract):
     ]
 
     chat = ChatOpenAI(model="gpt-3.5-turbo")
-    chat.invoke(messages)
+
 
     return chat.batch([messages])[0].content
 
 
-@retry(delay=6,)
-def check_PAMIreview(title, abstract):
-    messages = [
-            SystemMessage(
-                content="You are a profound researcher in the field of artificial intelligence who is good at "
-                        "identifying whether a paper is a survey or review paper in the field of pattern analysis and "
-                        "machine intelligence."
-                    "Note that not all paper that its title contain survey or review is a review paper. "
-                    "Here are some examples: 'transformers in medical image analysis: a review' is a survey paper. "
-                        "'Creating a Scholarly Knowledge Graph from Survey Article Tables' is Not a survey. "
-                        "'Providing Insights for Open-Response Surveys via End-to-End Context-Aware Clustering' is "
-                        "Not a survey. 'sifn: a sentiment-aware interactive fusion network for review-based item "
-                        "recommendation' is Not a review."
-),
-            HumanMessage(content=f'''Given title and abstract, identify whether the given paper is a review or survey paper (answer with Y or N)
-            Given Title: {title}
-            Given Abstract: {abstract}
-            Answer with the exact following format:Y||N'''),
-        ]
-    chat = ChatOpenAI(model="gpt-3.5-turbo")
-    chat.invoke(messages)
-
-    return chat.batch([messages])[0].content
 
 
 def get_unnum_sectitle(sectitle):
@@ -92,30 +59,26 @@ def get_unnum_sectitle(sectitle):
         HumanMessage(content=f'This is the title of section, extract the title without chapter numbering(If chapter numbering exists). Answer with the following format: xxx. \n Section Title: {sectitle}'),
     ]
     chat = ChatOpenAI(model="gpt-3.5-turbo")
-    chat.invoke(messages)
+
 
     return chat.batch([messages])[0].content
 @retry()
-def get_chatgpt_field(title, abstract=None, sys_content=None, usr_prompt=None, extra_prompt=True):
+def get_chatgpt_field(title, abstract=None, sys_content=None, usr_prompt=None, extra_prompt=True,model="gpt-3.5-turbo-0125",temperature=0):
+
     if not sys_content:
         sys_content = (
-            "You are a profound researcher who is good at identifying the topic keyword from paper's title and "
-            "abstract. The keyword will be used to retrieve related paper from online scholar search engines.")
+            "You are a profound researcher who is good at identifying the topic key phrase from paper's title and "
+            "abstract. Ensure that the topic key phrase precisely defines the research area within the article. For effective academic searching, such as on Google Scholar, the field should be specifically targeted rather than broadly categorized. For instance, use 'image classification' instead of the general 'computer vision' to enhance relevance and searchability of related literature.")
     if not usr_prompt:
-        usr_prompt = (
-            "Identifying the topic of the paper based on the given title and abstract. So that I can use it as "
-            "keyword to search highly related papers from Google Scholar.  Avoid using broad or overly general "
-            "terms like 'deep learning', 'computer vision', or 'artificial intelligence'. Instead, focus on keyword that are unique "
-            "and directly pertinent to the paper's subject.Answer with the word only in the"
-            "following format: xxx")
+        usr_prompt = ("Given the title and abstract below, determine the specific research field by focusing on the main application area and the key technology. You MUST respond with the keyword ONLY in this format: xxx")
 
     messages = [SystemMessage(content=sys_content)]
 
     extra_abs_content = '''
-    Given Title: A Survey of Self-Supervised and Few-Shot Object Detection
-    Given Abstract: Labeling data is often expensive and time-consuming, especially for tasks such as object detection and instance segmentation, which require dense labeling of the image. While few-shot object detection is about training a model on novel(unseen) object classeswith little data, it still requires prior training onmany labeled examples of base(seen) classes. On the other hand, self-supervisedmethods aimat learning representations fromunlabeled data which transfer well to downstream tasks such as object detection. Combining few-shot and self-supervised object detection is a promising research direction. In this survey, we reviewand characterize themost recent approaches on few-shot and self-supervised object detection. Then, we give our main takeaways and discuss future research directions. Project page: https://gabrielhuang.github.io/fsod-survey/''' if abstract else ''
+    Given Title: Large Selective Kernel Network for Remote Sensing Object Detection
+    Given Abstract: Recent research on remote sensing object detection has largely focused on improving the representation of oriented bounding boxes but has overlooked the unique prior knowledge presented in remote sensing scenarios. Such prior knowledge can be useful because tiny remote sensing objects may be mistakenly detected without referencing a sufficiently long-range context, which can vary for different objects. This paper considers these priors and proposes the lightweight Large Selective Kernel Network (LSKNet). LSKNet can dynamically adjust its large spatial receptive field to better model the ranging context of various objects in remote sensing scenarios. To our knowledge, large and selective kernel mechanisms have not been previously explored in remote sensing object detection. Without bells and whistles, our lightweight LSKNet sets new state-of-the-art scores on standard benchmarks, i.e., HRSC2016 (98.46% mAP), DOTA-v1.0 (81.85% mAP), and FAIR1M-v1.0 (47.87% mAP).''' if abstract else ''
     if extra_prompt:
-        messages += [HumanMessage(content=f'''{usr_prompt}\n\n{extra_abs_content}'''), AIMessage(content='few-shot objection detection')]
+        messages += [HumanMessage(content=f'''{usr_prompt}\n\n{extra_abs_content}'''), AIMessage(content='remote sensing object detection')]
 
     content = f'''{usr_prompt}
                 Given Title: {title}
@@ -124,12 +87,14 @@ def get_chatgpt_field(title, abstract=None, sys_content=None, usr_prompt=None, e
         content += f'Given Abstract: {abstract}'
     messages.append(HumanMessage(content=content))
 
-    chat = ChatOpenAI(model="gpt-3.5-turbo")
-    chat.invoke(messages)
+    chat = ChatOpenAI(model=model,temperature=temperature)
+
+
 
     return chat.batch([messages])[0].content
 @retry()
 def get_chatgpt_fields(title, abstract, extra_prompt=True,sys_content=None,usr_prompt=None):
+
     if not sys_content:
         sys_content = ("You are a profound researcher who is good at conduct a literature review based on given title and abstract.")
     if not usr_prompt:
@@ -168,7 +133,7 @@ def get_chatgpt_fields(title, abstract, extra_prompt=True,sys_content=None,usr_p
                 Given Abstract: {abstract}
             ''')]
     chat = ChatOpenAI(model="gpt-3.5-turbo")
-    chat.invoke(messages)
+
 
     return chat.batch([messages])[0].content
 
@@ -215,7 +180,7 @@ def extract_keywords_from_article_with_gpt(text):
          The text of the first page:{text}''')
     ]
     chat = ChatOpenAI(model="gpt-3.5-turbo")
-    chat.invoke(messages)
+
 
     return chat.batch([messages])[0].content
 

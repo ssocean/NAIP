@@ -445,38 +445,6 @@ def insert_idLiterature_into_CoP(session):
 
 
 
-def gpt_process(session):
-    results = session.query(PaperMapping).all()
-    for row in tqdm(results):
-        # print(row.title)
-        if row.gpt_keywords is None:
-            keywords = get_chatgpt_keyword(row.title, row.abstract)
-            # if list_result[0] == 'Y':
-            #     row.is_review = 1
-            # elif list_result[0] == 'N':
-            #     row.is_review = 0
-            # print(list_result[1])
-
-            keywords = [keyword.replace('.', '').replace("'", "").replace('"', "") for keyword in keywords]
-
-            keywords = keywords[:5]
-            # row.gpt_keywords = ','.join(keywords)
-            row.gpt_keywords = ','.join(keywords)
-
-            session.commit()
-        else:
-            row.gpt_keywords = row.gpt_keywords.replace('.', '').replace("'", "").replace('"', "")
-            session.commit()
-        if row.is_review is None:
-            status = check_PAMIreview(row.title, row.abstract)
-            if status == ('N' or 'n'):
-                row.is_review = 0
-            if status == ('Y' or 'y'):
-                row.is_review = 1
-            session.commit()
-        print(f'{row.title}||{row.is_review}||{row.gpt_keywords}')
-    session.close()
-
 
 # gpt_process(session)
 # update_s2_ref(session)
