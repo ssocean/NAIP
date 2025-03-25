@@ -111,34 +111,40 @@ total_val_mae = 0.0
 all_pred = []
 all_GT = []
 model.eval()
-model,test_loader = accelerator.prepare(model,test_loader)
+model, test_loader = accelerator.prepare(model, test_loader)
+
 with torch.no_grad():
     for batch in tqdm(test_loader):
-
         outputs = model(**batch)
         predictions = outputs["logits"]
         labels = batch["labels"]
-        all_GT+=labels
 
-        all_pred+= predictions.squeeze(1)
+        all_GT.append(labels)
+        all_pred.append(predictions.squeeze(1))
 
         mse = nn.MSELoss()(predictions.squeeze(1), labels).item()
         mae = nn.L1Loss()(predictions.squeeze(1), labels).item()
 
         total_val_mse += mse
         total_val_mae += mae
-        
-
 
     avg_mse_loss = total_val_mse / len(test_loader)
-    avg_mae_loss = total_val_mae / len(test_loader) 
+    avg_mae_loss = total_val_mae / len(test_loader)
 
 
-all_pred = torch.Tensor(all_pred).squeeze()
-all_GT = torch.Tensor(all_GT).squeeze()
+all_pred = torch.cat(all_pred, dim=0)
+all_GT = torch.cat(all_GT, dim=0)
 
-print(args.weight_dir)
-print(avg_mse_loss,avg_mae_loss)
-print(NDCG_k(all_pred,all_GT))
-writer.close()
+all_pred = accelerator.gather_for_metrics(all_pred)
+all_GT = accelerator.gather_for_metrics(all_GT)
+
+
+all_pred_np = all_pred.cpu().numpy()
+all_GT_np = all_GT.cpu().numpy()
+
+if accelerator.is_main_process:
+    print(args.weight_dir)
+    print(f"MSE: {avg_mse_loss:.4f}, MAE: {avg_mae_loss:.4f}")
+    print(f"NDCG@20: {NDCG_k(all_pred_np, all_GT_np):.4f}")
+    writer.close()
 
