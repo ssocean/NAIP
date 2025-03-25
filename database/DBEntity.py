@@ -9,9 +9,9 @@ from sqlalchemy import create_engine, Column, Integer, String, DateTime, Float, 
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import sessionmaker
 
-from furnace.Author import Author
-from furnace.arxiv_paper import Arxiv_paper
-from furnace.semantic_scholar_paper import S2paper
+from retriever.Author import Author
+from retriever.arxiv_paper import Arxiv_paper
+from retriever.semantic_scholar_paper import S2paper
 
 
 engine = create_engine('xxxScImpactPredict')

@@ -13,8 +13,8 @@ import pandas as pd
 import matplotlib.pyplot as plt
 import string
 
-from furnace.Author import Author
-from furnace.Publication import Document
+from retriever.Author import Author
+from retriever.Publication import Document
 
 import uuid
 import mysql.connector

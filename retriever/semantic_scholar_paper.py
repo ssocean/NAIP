@@ -1,6 +1,6 @@
 import re
-from furnace.Author import Author
-from furnace.Publication import Document
+from retriever.Author import Author
+from retriever.Publication import Document
 import logging
 import math
 import statistics

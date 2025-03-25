@@ -92,7 +92,7 @@ We also offer the weights of other models for download.
 With a few adjustments based on your specific needs, it should work fine. Since these models train very quickly (less than a few minutes on a single RTX 3080), we won’t be providing the trained weights.
 
 ##### Repo Structure Description
-Folders like furnace, database, and tools are used for building the NAID and TKPD datasets. They have no direct connection to training or inference.
+Folders like retriever, database, and tools are used for building the NAID and TKPD datasets. They have no direct connection to training or inference.
 
 ### We are pretty confident in our methodology and experiments, and you should be able to achieve any of the performance reported in our paper within an acceptable margin.
 

@@ -13,8 +13,8 @@ import pandas as pd
 import matplotlib.pyplot as plt
 import string
 
-from furnace.Author import Author
-from furnace.Publication import Document
+from retriever.Author import Author
+from retriever.Publication import Document
 from tools.Reference import filter_punctuation, get_paper_info_from_REST
 
 

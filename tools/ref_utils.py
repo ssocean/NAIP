@@ -14,7 +14,7 @@ from scipy.stats import spearmanr, pearsonr
 
 from CACHE.CACHE_Config import generate_cache_file_name
 from config.config import eskey, openai_key, s2api
-from furnace.semantic_scholar_paper import S2paper, request_query
+from retriever.semantic_scholar_paper import S2paper, request_query
 from tools.Cache import make_cached_request, dump_cache
 from tools.Reference import Ref
 

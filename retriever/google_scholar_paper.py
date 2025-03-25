@@ -7,8 +7,8 @@ from retry import retry
 from scholarly import scholarly
 
 
-from furnace.Author import Author
-from furnace.Publication import Document
+from retriever.Author import Author
+from retriever.Publication import Document
 
 class Google_paper(Document):
     def __init__(self, ref_obj, ref_type='title', **kwargs):

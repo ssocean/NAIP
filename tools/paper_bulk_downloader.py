@@ -11,13 +11,13 @@ import os
 import re
 from tqdm import tqdm
 from database.DBEntity import AuthorMapping, AoP, PaperMapping
-from furnace.Author import Author
-from furnace.arxiv_paper import Arxiv_paper, get_arxiv_id_from_url
+from retriever.Author import Author
+from retriever.arxiv_paper import Arxiv_paper, get_arxiv_id_from_url
 from sqlalchemy import create_engine, Column, Integer, String
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import sessionmaker
-from furnace.google_scholar_paper import Google_paper
-from furnace.semantic_scholar_paper import S2paper
+from retriever.google_scholar_paper import Google_paper
+from retriever.semantic_scholar_paper import S2paper
 
 from tools.gpt_util import *
 # d  {'representation learning': 111, 'meta-learning': 1, 'facial recognition': 6, 'vision transformer': 24, 'transfer learning': 131, 'image recognition': 15, 'action detection': 6, 'semantic segmentation': 51, 'speech recognition': 73, 'image segmentation': 56, 'sentiment analysis': 125, 'emotion recognition': 15, 'object detection': 220, 'image restoration': 10, 'question answering': 101, 'anomaly detection': 108, 'relation extraction': 20, 'adversarial attack': 71, 'speech synthesis': 13, 'object tracking': 31, 'document analysis and recognition': 2, 'superpixels': 5, 'instance segmentation': 11, 'time series analysis': 23, 'image retrieval': 25, 'image matching': 3, 'image editing': 9, 'depth estimation': 12, 'point cloud': 51, 'mask image modeling': 2, 'text generation': 45, 'image generation': 35, 'time series forecasting': 14, 'salient object detection': 5, 'saliency detection': 5, 'image clustering': 2, 'image enhancement': 14, 'diffusion model': 37, 'machine translation': 64, 'ocr': 11, 'image reconstruction': 27, 'image inpainting': 1, 'remote sensing': 83, 'cnn': 187, 'image quality assessment': 7, 'named entity recognition': 17, 'image captioning': 18, 'video object segmentation': 1, 'edge detection': 13, 'reinforcement learning': 285, 'contrastive learning': 20, 'image compression': 12, 'computer vision': 588, 'speech enhancement': 2, 'word embeddings': 45, 'language modelling': 233, 'text classification': 45, 'visual question answering': 21, 'optical character recognition': 9, 'domain adaptation': 62, 'video understanding': 4, 'text summarization': 24, 'image classification': 87, 'metric learning': 10}

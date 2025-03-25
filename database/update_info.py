@@ -9,16 +9,16 @@ from tqdm import tqdm
 
 from CACHE.CACHE_Config import generate_cache_file_name
 from database.DBEntity import AuthorMapping, AoP, PaperMapping, RefMapping, RoP, CoP
-from furnace.Author import Author
-from furnace.arxiv_paper import Arxiv_paper
+from retriever.Author import Author
+from retriever.arxiv_paper import Arxiv_paper
 
 from sqlalchemy import create_engine, Column, Integer, String
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy import create_engine, MetaData, Table
 from sqlalchemy.orm import sessionmaker
-from furnace.google_scholar_paper import Google_paper
-from furnace.semantic_scholar_paper import S2paper
+from retriever.google_scholar_paper import Google_paper
+from retriever.semantic_scholar_paper import S2paper
 from tools.gpt_util import *
 
 Base = declarative_base()

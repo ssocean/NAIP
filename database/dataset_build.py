@@ -103,7 +103,7 @@ from langchain_community.vectorstores import FAISS
 
 from tqdm import tqdm
 from database.DBEntity import *
-from furnace.arxiv_paper import Arxiv_paper
+from retriever.arxiv_paper import Arxiv_paper
 from sqlalchemy import create_engine, and_
 
 from sqlalchemy.orm import sessionmaker,declarative_base

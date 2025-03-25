@@ -4,14 +4,14 @@ import re
 from tqdm import tqdm
 
 from database.DBEntity import PaperMapping
-from furnace.arxiv_paper import Arxiv_paper
+from retriever.arxiv_paper import Arxiv_paper
 
 from sqlalchemy import create_engine, Column, Integer, String
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import sessionmaker
 
-from furnace.arxiv_paper import Arxiv_paper
-from furnace.google_scholar_paper import Google_paper
+from retriever.arxiv_paper import Arxiv_paper
+from retriever.google_scholar_paper import Google_paper
 from tools.gpt_util import *
 
 Base = declarative_base()
