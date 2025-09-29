@@ -1,7 +1,7 @@
 
 
 <p align="center">
-  <img src="/img/naip_hr.png" alt="NAIP Framework Overview" width="30%">
+  <img src="/img/naip_hr.png" alt="NAIP Logo" width="30%" style="border: 4px solid #231815; border-radius: 12px; padding: 5px;">
 </p>
 
 # Framework for newborn article impact & quality estimation.
