@@ -1,6 +1,12 @@
-# NAIP Series: Framework for newborn article impact & quality estimation.
 
-## NAIP Series [![Hugging Face Spaces](https://img.shields.io/badge/%20Try%20Free%20Demo-orange?logo=huggingface)](https://huggingface.co/spaces/ssocean/Newborn_Article_Impact_Predict)
+
+<p align="center">
+  <img src="/img/naip_hr.png" alt="NAIP Framework Overview" width="30%">
+</p>
+
+# Framework for newborn article impact & quality estimation.
+
+## Overview [![Hugging Face Spaces](https://img.shields.io/badge/%20Try%20Free%20Demo-orange?logo=huggingface)](https://huggingface.co/spaces/ssocean/Newborn_Article_Impact_Predict)
 
 
 The NAIP series uses fine-tuned LLMs to quickly predict the **impact** or **quality** of articles based on their internal content. 
@@ -76,6 +82,32 @@ Then, type `sh test.sh`.
 ##### Preliminary code and dataset are released at ./v2_resource, detailed instructions will be released after 2025.10.7. 🚀 (Core team members are on vacation 🏖️)
 
 
+## 🛠️ Technical Support
+If you would like to conduct **comparison experiments** with NAIP but encounter difficulties in setting up the environment or reproducing the code, we provide **free technical support**.
+
+Simply send us a `.csv` file containing the **"title"** and **"abstract"** fields, and we will return the prediction results to you.  
+- In urgent cases, results can be provided **within one day**.  
+- This service is free of charge and intended to facilitate **fair, reproducible comparisons** in research.  
+
+📩 Please contact us via [oceanytech@gmail.com].
+
+
+## 📚 Citation
+If you find this work useful, please cite:
+
+```bibtex
+@article{Zhao2024NAIP,
+  title={From Words to Worth: Newborn Article Impact Prediction with LLM},
+  author={Penghai Zhao and Qinghua Xing and Kairan Dou and Jinyu Tian and Ying Tai and Jian Yang and Ming-Ming Cheng and Xiang Li},
+  journal={ArXiv},
+  year={2024},
+  volume={abs/2408.03934},
+  url={https://api.semanticscholar.org/CorpusID:271744831}
+}
+```
+
+
+
 [//]: # ()
 [//]: # (## Model Weights)
 
@@ -105,17 +137,3 @@ Then, type `sh test.sh`.
 [//]: # (##### Repo Structure Description)
 
 [//]: # (Folders like retriever, database, and tools are used for building the NAID and TKPD datasets. They have no direct connection to training or inference.)
-
-### We are pretty confident in our methodology and experiments, and you should be able to achieve any of the performance reported in our paper within an acceptable margin.
-
-## BibTex
-```
-@article{Zhao2024NAIP,
-  title={From Words to Worth: Newborn Article Impact Prediction with LLM},
-  author={Penghai Zhao and Qinghua Xing and Kairan Dou and Jinyu Tian and Ying Tai and Jian Yang and Ming-Ming Cheng and Xiang Li},
-  journal={ArXiv},
-  year={2024},
-  volume={abs/2408.03934},
-  url={https://api.semanticscholar.org/CorpusID:271744831}
-}
-```
