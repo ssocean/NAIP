@@ -4,10 +4,8 @@ annotated-types==0.7.0
 bitsandbytes==0.42.0
 certifi==2024.2.2
 charset-normalizer==3.3.2
-deepspeed==0.14.2
 einops==0.8.0
 filelock==3.14.0
-flash-attn==2.6.1
 fsspec==2024.5.0
 grpcio
 hjson==3.1.0
