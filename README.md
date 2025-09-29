@@ -6,9 +6,12 @@
 
 # Framework for newborn article impact & quality estimation.
 
+
 ## Overview [![Hugging Face Spaces](https://img.shields.io/badge/%20Try%20Free%20Demo-orange?logo=huggingface)](https://huggingface.co/spaces/ssocean/Newborn_Article_Impact_Predict)
 
-
+<p align="center">
+  <img src="/img/typo.png" alt="NAIP Framework Overview" width="100%">
+</p>
 The NAIP series uses fine-tuned LLMs to quickly predict the **impact** or **quality** of articles based on their internal content. 
 
 
