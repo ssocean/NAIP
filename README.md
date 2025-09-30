@@ -16,10 +16,10 @@ The NAIP series uses fine-tuned LLMs to quickly predict the **impact** or **qual
 
 
 
-| Version | Input              | Output                  | Model Weights                                                                 | Homepage                                                                 | Paper                                         |
-|---------|--------------------|-------------------------|-------------------------------------------------------------------------------|--------------------------------------------------------------------------|-----------------------------------------------|
-| v1      | Title & Abstract   | Impact Estimation (0–1) | [Link](https://huggingface.co/ssocean/NAIPv1)                                 | [Link](https://sway.cloud.microsoft/KOH09sPR21Ubojbc)                    | [AAAI 2025](https://ojs.aaai.org/index.php/AAAI/article/view/32106/34261) |
-| v2      | Title & Abstract   | Quality Estimation      | [Link](https://huggingface.co/ssocean/NAIPv2)                                 | [Link](https://sway.cloud.microsoft/Pr42npP80MfPhvj8)                    | [In Preparation](#)                           |
+| Version | Input              | Output                  | Model Weights                                                               | Homepage                                                                 | Paper                                                                     |
+|---------|--------------------|-------------------------|-----------------------------------------------------------------------------|--------------------------------------------------------------------------|---------------------------------------------------------------------------|
+| v1      | Title & Abstract   | Impact Estimation (0–1) | [Link](https://huggingface.co/ssocean/NAIP)                                 | [Link](https://sway.cloud.microsoft/KOH09sPR21Ubojbc)                    | [AAAI 2025](https://ojs.aaai.org/index.php/AAAI/article/view/32106/34261) |
+| v2      | Title & Abstract   | Quality Estimation      | [Link](https://huggingface.co/ssocean/NAIPv2)                               | [Link](https://sway.cloud.microsoft/Pr42npP80MfPhvj8)                    | [arXiv](https://arxiv.org/abs/2509.25179)                                 |
 
 [//]: # (This repository contains the official implementation for the paper [**"From Words to Worth: Newborn Article Impact Prediction with LLM"**]&#40;https://sway.cloud.microsoft/KOH09sPR21Ubojbc&#41;. The tool is designed to PEFT the LLMs for the prediction of the future impact.)
 
