@@ -27,3 +27,4 @@ official_runs*
 prune.py
 local_test/test.py
 /local_test
+/NAID_builder

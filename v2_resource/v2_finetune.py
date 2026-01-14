@@ -1,10 +1,12 @@
 import os
 import csv
 import time
+import json
 import logging
 import argparse
 from datetime import datetime
-import numpy as np
+from typing import Any, Dict, List, Optional, Sequence, Tuple
+
 
 from accelerate import Accelerator
 from accelerate.utils import set_seed, tqdm
@@ -25,36 +27,35 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 
+from v2_resource.NAIDv2.dataset import _ensure_list
+
 torch.backends.cudnn.benchmark = False
 torch.backends.cudnn.deterministic = True
 
 
 class PairwiseBCELoss(nn.Module):
-    '''
-    Aka RankNetLoss
-    '''
+    """
+    Aka RankNetLoss (BT-style on diff)
+    """
     def __init__(self):
         super().__init__()
 
     def forward(self, pred1, pred2, score1, score2):
-        label = (score1 > score2).float()  # 1 if pred1 should be higher
+        label = (score1 > score2).float()
         pred_diff = pred1 - pred2
         return F.binary_cross_entropy_with_logits(pred_diff, label)
+
+
 # ---------------------------------------------------------------------
 # Environment & logging
 # ---------------------------------------------------------------------
-
 os.environ.setdefault("TOKENIZERS_PARALLELISM", "false")
-logging.basicConfig(
-    level=logging.INFO,
-    format="%(asctime)s | %(levelname)s | %(message)s",
-)
+logging.basicConfig(level=logging.INFO, format="%(asctime)s | %(levelname)s | %(message)s")
 
 
 # ---------------------------------------------------------------------
 # CSV utilities
 # ---------------------------------------------------------------------
-
 def write_val_preds_csv(
     runs_dir: str,
     epoch: int,
@@ -63,10 +64,6 @@ def write_val_preds_csv(
     labels: Optional[Sequence[float]] = None,
     accepts: Optional[Sequence[Any]] = None,
 ) -> None:
-    """
-    Write per-sample pointwise validation predictions:
-    columns: id, pred, label, accept, abs_error
-    """
     os.makedirs(runs_dir, exist_ok=True)
     rows = []
     n = len(ids)
@@ -87,15 +84,12 @@ def write_val_preds_csv(
     latest_path = os.path.join(runs_dir, "val_pointwise_preds_latest.csv")
     for p in (epoch_path, latest_path):
         with open(p, "w", newline="", encoding="utf-8") as f:
-            writer = csv.DictWriter(
-                f, fieldnames=["id", "pred", "label", "accept", "abs_error"]
-            )
+            writer = csv.DictWriter(f, fieldnames=["id", "pred", "label", "accept", "abs_error"])
             writer.writeheader()
             writer.writerows(rows)
 
 
 def _upgrade_csv_header(csv_path: str, new_fields: List[str]) -> None:
-    """If new metric columns appear, upgrade the CSV header while preserving history."""
     with open(csv_path, "r", newline="", encoding="utf-8") as f:
         reader = csv.DictReader(f)
         old_fields = reader.fieldnames or []
@@ -112,10 +106,6 @@ def _upgrade_csv_header(csv_path: str, new_fields: List[str]) -> None:
 
 
 def log_metrics_single_csv(runs_dir: str, epoch: int, group: str, metrics: Dict[str, Any]) -> None:
-    """
-    Append metrics into runs_dir/val_metrics.csv.
-    Automatically expands columns for new metric keys.
-    """
     os.makedirs(runs_dir, exist_ok=True)
     csv_path = os.path.join(runs_dir, "val_metrics.csv")
 
@@ -150,33 +140,6 @@ def log_metrics_single_csv(runs_dir: str, epoch: int, group: str, metrics: Dict[
 # ---------------------------------------------------------------------
 # Argparse helpers
 # ---------------------------------------------------------------------
-
-def _parse_list(s: Optional[str]) -> Optional[List[Any]]:
-    """Parse a list: prefer JSON; fallback to comma-separated."""
-    if s is None or str(s).strip().lower() in ("", "none", "null"):
-        return None
-    try:
-        v = json.loads(s)
-        if isinstance(v, list):
-            return v
-    except Exception:
-        pass
-    return [e.strip() for e in str(s).split(",") if e.strip()]
-
-
-def _parse_bucket_edges(s: Optional[str]) -> Optional[List[float]]:
-    lst = _parse_list(s)
-    if lst is None:
-        return None
-    out: List[float] = []
-    for x in lst:
-        if isinstance(x, str) and x.lower() in ("inf", "+inf", "infinity"):
-            out.append(float("inf"))
-        else:
-            out.append(float(x))
-    return out
-
-
 def _str2bool(v: Any) -> bool:
     if isinstance(v, bool):
         return v
@@ -188,62 +151,24 @@ def _str2bool(v: Any) -> bool:
     raise argparse.ArgumentTypeError("Boolean value expected.")
 
 
-def _parse_tuple_str(s: Optional[str], default: Tuple[str, ...] = ("pub_year", "cluster_cat")) -> Tuple[str, ...]:
-    if not s:
-        return tuple(default)
-    parts = [p.strip() for p in s.split(",") if p.strip()]
-    return tuple(parts) if parts else tuple(default)
-
-
 def get_args() -> argparse.Namespace:
-    parser = argparse.ArgumentParser(description="Pairwise + Pointwise training with LoRA")
+    parser = argparse.ArgumentParser(description="RTS Pairwise + Pointwise training with LoRA")
 
-    # Data
-    parser.add_argument("--data_path", type=str, default="./data/train.csv")
-    parser.add_argument("--gt_field", type=str, default="gt")
-
-    # Pairwise sampling (tunable)
-    parser.add_argument("--pw_group_by_cluster_year", type=_str2bool, default=True)
-    parser.add_argument("--pw_group_keys", type=str, default="pub_year,cluster_cat")
-    parser.add_argument("--pw_min_diff", type=float, default=0.05)
-    parser.add_argument(
-        "--pw_bucket_edges",
-        type=str,
-        default='[0,0.1,0.2,0.3,0.4,0.5,0.6,0.7,0.8,0.9,"inf"]',
-        help='JSON or comma list; use "inf" for +infinity',
-    ) # DO NOT CHANGE
-    parser.add_argument(
-        "--pw_target_ratio",
-        type=str,
-        default="[0.03,0.04,0.06,0.08,0.10,0.12,0.14,0.16,0.27,0.00]",
-        help="JSON or comma list; should sum to ~1.0",
-    )
-    parser.add_argument("--pw_curriculum", type=_str2bool, default=True)
-    parser.add_argument("--pw_balance", type=_str2bool, default=True)
-    parser.add_argument("--pw_cap_per_paper", type=int, default=32, help="capacity per paper, -1 means no capacity")
-    parser.add_argument("--pw_id_fields", type=str, default="id")
-    parser.add_argument("--pw_use_weight", type=_str2bool, default=True)
-    parser.add_argument(
-        "--pw_weight_mode",
-        type=str,
-        default="linear_clip",
-        choices=["none", "linear", "linear_clip", "sqrt"],
-    )
-    parser.add_argument("--pw_weight_clip_min", type=float, default=0.2)
-    parser.add_argument("--pw_weight_clip_max", type=float, default=1.0)
-    parser.add_argument("--pw_verbose", type=_str2bool, default=True)
-    parser.add_argument("--pair_val_max_pairs", type=int, default=1_000_000)
-    parser.add_argument("--additional_info", type=str, default=None, help="JSON list or comma list")
+    # Data path / cols
+    parser.add_argument("--data_path", type=str, default=r"C:\Users\Ocean\Documents\GitHub\reduct_academic\NAID_builder\datasets\dataset_heir_clusters_ward_2.2.csv")
+    parser.add_argument("--title_col", type=str, default="title")
+    parser.add_argument("--abstract_col", type=str, default="abstract")
+    parser.add_argument("--year_col", type=str, default="pub_year")
+    parser.add_argument("--cluster_col", type=str, default="cluster_id")
+    parser.add_argument("--score_col", type=str, default="scores")
+    parser.add_argument("--conf_col", type=str, default="confs")
+    parser.add_argument("--id_col", type=str, default="id")
+    parser.add_argument("--accept_col", type=str, default="accept")
 
     # Model / Tokenization
-    parser.add_argument("--checkpoint", type=str, default="your-base-checkpoint")
+    parser.add_argument("--checkpoint", type=str, default=r"H:\weights\Qwen3-4B-Instruct-2507")
     parser.add_argument("--num_labels", type=int, default=1)
     parser.add_argument("--max_length", type=int, default=512)
-    parser.add_argument(
-        "--prompt_template",
-        type=str,
-        default="Given a scientific paper, Title: {title}\nAbstract: {abstract}\nPlease evaluate the overall scientific quality:",
-    )
 
     # Quantization / LoRA
     parser.add_argument("--load_in_8bit", type=_str2bool, default=True)
@@ -259,24 +184,38 @@ def get_args() -> argparse.Namespace:
     parser.add_argument("--weight_decay", type=float, default=1e-2)
     parser.add_argument("--warmup_ratio", type=float, default=0.1)
     parser.add_argument("--seed", type=int, default=42)
-    parser.add_argument("--loss_func", type=str, default="default")
     parser.add_argument("--runs_dir", type=str, default="./runs")
-    parser.add_argument("--max_pairs", type=int, default=None)
-    parser.add_argument("--max_samples", type=int, default=None)
     parser.add_argument("--shuffle_train", type=_str2bool, default=True)
-    parser.add_argument(
-        "--need_pairwise_eval",
-        action="store_true",
-        help="Enable pairwise evaluation",
-    )
-    parser.add_argument("--loss_soft_tau", type=float, default=0.25)
+    parser.add_argument("--need_pairwise_eval", action="store_true")
+
+    # Pairwise dataset knobs (match your dataset)
+    parser.add_argument("--max_pairs", type=int, default=10_000)
+    parser.add_argument("--enable_flip", type=_str2bool, default=True)
+    parser.add_argument("--flip_prob", type=float, default=0.5)
+    parser.add_argument("--enable_rts_jitter", type=_str2bool, default=False)
+    parser.add_argument("--jitter_std_scale", type=float, default=1.0)
+    parser.add_argument("--jitter_prob", type=float, default=0.3)
+
+    # RTS kwargs knobs
+    parser.add_argument("--rts_support_lo", type=float, default=0.0)
+    parser.add_argument("--rts_support_hi", type=float, default=1.0)
+    parser.add_argument("--rts_conf_lower_bound", type=float, default=0.2)
+    parser.add_argument("--rts_sigma_base", type=float, default=0.2)
+    parser.add_argument("--rts_sigma_bias", type=float, default=0.05)
+
+    # Pointwise dataset knobs
+    parser.add_argument("--score_reduce", type=str, default="mean", choices=["mean", "median"])
+    parser.add_argument("--use_accept", type=_str2bool, default=False)
+
+    # Pairwise val size
+    parser.add_argument("--pair_val_max_pairs", type=int, default=200_000)
 
     args = parser.parse_args()
 
     os.makedirs(args.runs_dir, exist_ok=True)
     save_path = os.path.join(args.runs_dir, "args.json")
-    with open(save_path, "w") as f:
-        json.dump(vars(args), f, indent=4)
+    with open(save_path, "w", encoding="utf-8") as f:
+        json.dump(vars(args), f, indent=4, ensure_ascii=False)
     logging.info(f"Args saved to {save_path}")
     return args
 
@@ -284,9 +223,8 @@ def get_args() -> argparse.Namespace:
 # ---------------------------------------------------------------------
 # Model wrapper
 # ---------------------------------------------------------------------
-
-class SiameseWrapper(torch.nn.Module):
-    def __init__(self, base_model: torch.nn.Module):
+class SiameseWrapper(nn.Module):
+    def __init__(self, base_model: nn.Module):
         super().__init__()
         self.base_model = base_model
 
@@ -305,53 +243,40 @@ class SiameseWrapper(torch.nn.Module):
 
 
 def get_model_and_tokenizer(args: argparse.Namespace) -> Tuple[AutoTokenizer, SiameseWrapper]:
-    """Build tokenizer + model with optional 8-bit and LoRA."""
-
-    device_map = {'': torch.cuda.current_device()}
-    print(device_map)
-
-    tokenizer = AutoTokenizer.from_pretrained(args.checkpoint)
+    tokenizer = AutoTokenizer.from_pretrained(args.checkpoint, use_fast=True)
 
     model = AutoModelForSequenceClassification.from_pretrained(
         args.checkpoint,
         num_labels=args.num_labels,
         device_map={"": torch.cuda.current_device()},
-        load_in_8bit=True
+        load_in_8bit=args.load_in_8bit,
     )
 
     model.config.pad_token_id = model.config.eos_token_id
     tokenizer.pad_token = tokenizer.eos_token
-    model.loss_func = args.loss_func
 
-    if len(args.target_modules) > 0:
-        lora_config = LoraConfig(
-            r=args.lora_r,
-            lora_alpha=args.lora_alpha,
-            lora_dropout=args.lora_dropout,
-            target_modules=args.target_modules.split(','),
-            task_type=TaskType.SEQ_CLS,
-            inference_mode=False
-        )
-    else:
-        lora_config = LoraConfig(
-            r=args.lora_r,
-            lora_alpha=args.lora_alpha,
-            lora_dropout=args.lora_dropout,
-            task_type=TaskType.SEQ_CLS,
-            inference_mode=False
-        )
+    # LoRA
+    target_modules = [m.strip() for m in args.target_modules.split(",") if m.strip()]
+    lora_config = LoraConfig(
+        r=args.lora_r,
+        lora_alpha=args.lora_alpha,
+        lora_dropout=args.lora_dropout,
+        target_modules=target_modules if len(target_modules) > 0 else None,
+        task_type=TaskType.SEQ_CLS,
+        inference_mode=False,
+    )
 
-    model = prepare_model_for_kbit_training(model)
+    if args.load_in_8bit:
+        model = prepare_model_for_kbit_training(model)
+
     model = get_peft_model(model, lora_config)
     model.print_trainable_parameters()
-    siamese_model = SiameseWrapper(model)
-    return tokenizer, siamese_model
+    return tokenizer, SiameseWrapper(model)
 
 
 # ---------------------------------------------------------------------
 # Metrics
 # ---------------------------------------------------------------------
-
 def compute_regression_metrics(
     preds: Sequence[float],
     labels: Sequence[float],
@@ -361,10 +286,8 @@ def compute_regression_metrics(
     scores = np.array(preds, dtype=float).squeeze()
     labels = np.array(labels, dtype=float).squeeze()
 
-    # MAE
     metrics["mae"] = float(np.mean(np.abs(scores - labels)))
 
-    # Optional classification metrics if accept labels exist
     if accept is not None and len(accept) == len(scores):
         try:
             accept_arr = np.array(accept).astype(float)
@@ -374,7 +297,6 @@ def compute_regression_metrics(
             metrics["roc_auc"] = float("nan")
             metrics["pr_auc"] = float("nan")
 
-    # Ranking metrics
     def safe_minmax(x: np.ndarray) -> np.ndarray:
         r = x.max() - x.min()
         return np.zeros_like(x) if r < 1e-8 else (x - x.min()) / (r + 1e-8)
@@ -392,118 +314,102 @@ def compute_regression_metrics(
 # ---------------------------------------------------------------------
 # Main
 # ---------------------------------------------------------------------
-
 def main() -> None:
     args = get_args()
-
-    # Reproducibility
     set_seed(args.seed)
-
 
     accelerator = Accelerator()
     device = accelerator.device
     is_main = accelerator.is_main_process
-
     writer = SummaryWriter(log_dir=args.runs_dir) if is_main else None
 
-    # Build model and tokenizer
+    # Build model/tokenizer
     tokenizer, model = get_model_and_tokenizer(args)
     model = model.to(device)
 
-    # Datasets
+    # Load data
     df_all = pd.read_csv(args.data_path)
 
-    # Shuffle before splitting for randomness
-    df_all = df_all.sample(frac=1.0, random_state=args.seed).reset_index(drop=True)
+    # ---- normalize required columns to your dataset expectation ----
+    # scores/confs: list or string(list) -> list[float]
+    df_all[args.score_col] = df_all[args.score_col].apply(_ensure_list)
+    df_all[args.conf_col] = df_all[args.conf_col].apply(_ensure_list)
 
-    # 9:1 split
+    # ensure year/cluster usable for groupby
+    df_all[args.year_col] = df_all[args.year_col].astype(int)
+    df_all[args.cluster_col] = df_all[args.cluster_col].astype(int)
+
+    # Shuffle + split 9:1
+    df_all = df_all.sample(frac=1.0, random_state=args.seed).reset_index(drop=True)
     split_idx = int(len(df_all) * 0.9)
     df_train = df_all.iloc[:split_idx].reset_index(drop=True)
     df_val = df_all.iloc[split_idx:].reset_index(drop=True)
 
-    bucket_edges = _parse_bucket_edges(args.pw_bucket_edges)
-    target_ratio = _parse_list(args.pw_target_ratio)
-    group_keys = _parse_tuple_str(args.pw_group_keys, default=("pub_year", "cluster_cat"))
-    id_fields = _parse_tuple_str(args.pw_id_fields, default=("id", "paper_id", "guid"))
+    # Year scales (建议用 train 统计，避免 val 泄漏；你想全量也行)
+    year_scales = build_year_scales_from_df(
+        df_train,
+        score_col=args.score_col,
+        conf_col=args.conf_col,
+        year_col=args.year_col,
+    )
 
-    if args.additional_info is None:
-        additional_info: List[str] = []
-    else:
-        try:
-            additional_info = json.loads(args.additional_info)
-            if not isinstance(additional_info, list):
-                additional_info = [str(additional_info)]
-        except Exception:
-            additional_info = [s for s in str(args.additional_info).split(",") if s.strip()]
+    rts_kwargs = dict(
+        support=(args.rts_support_lo, args.rts_support_hi),
+        conf_lower_bound=args.rts_conf_lower_bound,
+        sigma_base=args.rts_sigma_base,
+        sigma_bias=args.rts_sigma_bias,
+    )
 
+    # ---- Datasets (use YOUR RTS datasets) ----
     train_ds = PairwisePaperDataset(
-        data=df_train,
-        tokenizer=tokenizer,
+        df_train,
+        tokenizer,
+        year_scales=year_scales,
         max_length=args.max_length,
-        prompt_template=args.prompt_template,
-        gt_field=args.gt_field,# Ground-truth score field (e.g., score_mean, score_weighted, score_median, score_mode, or RTS)
-        max_samples=args.max_samples,  # Maximum number of samples to load from the dataset before pairing
-        max_pairs=args.max_pairs,  # Maximum number of pairwise samples to generate from all available items
-        seed=args.seed,  # Random seed for reproducibility
-        group_by_cluster_year=args.pw_group_by_cluster_year,# Whether to group data by cluster/year before forming pairs
-        group_keys=group_keys,  # Columns used for grouping if group_by_cluster_year is enabled
-        min_diff=args.pw_min_diff,  # Minimum absolute score difference required to form a valid pair
-        bucket_edges=bucket_edges,  # DO NOT CHANGE
-        target_ratio=target_ratio,  # Desired sampling ratio for each diff bucket
-        curriculum=args.pw_curriculum,  # Enable curriculum learning (sort pairs by difficulty)
-        balance=args.pw_balance,  # Randomly swap the two samples in a pair to prevent positional bias (recommended)
-        cap_per_paper=None if args.pw_cap_per_paper is not None and args.pw_cap_per_paper < 0 else args.pw_cap_per_paper, # Maximum number of pairs each paper can appear in
-        use_weight=args.pw_use_weight,  # Deprecated
-        weight_mode=args.pw_weight_mode,  # Deprecated
-        weight_clip_min=args.pw_weight_clip_min,  # Deprecated
-        weight_clip_max=args.pw_weight_clip_max,  # Deprecated
-        additional_info=additional_info,  # Optional additional fields to include in the text input
-        verbose=args.pw_verbose,  # Whether to print detailed dataset construction statistics
-
+        max_pairs=args.max_pairs,
+        enable_flip=args.enable_flip,
+        flip_prob=args.flip_prob,
+        enable_rts_jitter=args.enable_rts_jitter,
+        jitter_std_scale=args.jitter_std_scale,
+        jitter_prob=args.jitter_prob,
+        rts_kwargs=rts_kwargs,
+        seed=args.seed,
     )
 
     val_ds = SingleScoreDataset(
-        data=df_val,
-        tokenizer=tokenizer,
+        df_val,
+        tokenizer,
         max_length=args.max_length,
-        gt_field=args.gt_field,
+        score_reduce=args.score_reduce,
+        use_accept=(args.use_accept and args.accept_col in df_val.columns),
     )
 
-    val_pair = PairwisePaperDataset(
-        data=df_val,
-        tokenizer=tokenizer,
+    # Pairwise val: 用同一种 PairwisePaperDataset，但关闭 jitter/curriculum 的概念在你这份里没有
+    val_pair_ds = PairwisePaperDataset(
+        df_val,
+        tokenizer,
+        year_scales=year_scales,   # 仍用 train 的 year_scales
         max_length=args.max_length,
-        prompt_template=args.prompt_template,
-        gt_field=args.gt_field,
         max_pairs=args.pair_val_max_pairs,
+        enable_flip=False,
+        enable_rts_jitter=False,
+        rts_kwargs=rts_kwargs,
         seed=args.seed,
-        group_by_cluster_year=True,
-        group_keys=group_keys,
-        min_diff=0.0,
-        bucket_edges=bucket_edges,
-        target_ratio=target_ratio,
-        curriculum=False,
-        balance=True,
-        cap_per_paper=1024,
-        additional_info=additional_info,
-        verbose=False,
     )
 
-    train_loader = DataLoader(
-        train_ds, batch_size=args.batch_size, shuffle=bool(args.shuffle_train), collate_fn=lambda x: x
-    )
-    val_loader = DataLoader(val_ds, batch_size=args.batch_size, shuffle=False, collate_fn=lambda x: x)
-    pair_val_loader = DataLoader(val_pair, batch_size=args.batch_size, shuffle=False, collate_fn=lambda x: x)
+    def _collate_identity(x):  # keep list-of-dicts
+        return x
 
-    # Optimizer & (later) scheduler
+    train_loader = DataLoader(train_ds, batch_size=args.batch_size, shuffle=bool(args.shuffle_train), collate_fn=_collate_identity)
+    val_loader = DataLoader(val_ds, batch_size=args.batch_size, shuffle=False, collate_fn=_collate_identity)
+    pair_val_loader = DataLoader(val_pair_ds, batch_size=args.batch_size, shuffle=False, collate_fn=_collate_identity)
+
     optimizer = AdamW(model.parameters(), lr=args.learning_rate, weight_decay=args.weight_decay)
 
-    # Prepare with accelerator
     model, optimizer, train_loader, val_loader, pair_val_loader = accelerator.prepare(
         model, optimizer, train_loader, val_loader, pair_val_loader
     )
 
-    # Scheduler (calculate after prepare so lengths are per-process)
     num_update_steps = max(1, args.total_epochs * len(train_loader))
     lr_scheduler = get_scheduler(
         name="linear",
@@ -512,24 +418,29 @@ def main() -> None:
         num_training_steps=num_update_steps,
     )
 
-    # Loss builder from your project
-    loss_fn = PairwiseBCELoss(args)  # noqa: F405
-    logging.info(f"Using loss: {loss_fn}")
+    loss_fn = PairwiseBCELoss()
+    logging.info(f"Using loss: {loss_fn.__class__.__name__}")
 
-    # Training loop
+    # -------------------- Training loop --------------------
     for epoch in range(args.total_epochs):
         model.train()
         if is_main:
             logging.info(f"Epoch {epoch + 1}/{args.total_epochs}")
 
-        for step, batch in tqdm(enumerate(train_loader), total=len(train_loader), desc=f"Epoch {epoch + 1}", dynamic_ncols=True):
+        for step, batch in tqdm(
+            enumerate(train_loader),
+            total=len(train_loader),
+            desc=f"Epoch {epoch + 1}",
+            dynamic_ncols=True,
+        ):
             a = torch.stack([f["input_ids_a"] for f in batch]).to(device)
             m1 = torch.stack([f["attention_mask_a"] for f in batch]).to(device)
             b = torch.stack([f["input_ids_b"] for f in batch]).to(device)
             m2 = torch.stack([f["attention_mask_b"] for f in batch]).to(device)
 
-            score_a = torch.stack([f["gt_a"] for f in batch]).to(device)
-            score_b = torch.stack([f["gt_b"] for f in batch]).to(device)
+            # IMPORTANT: your dataset uses score_a/score_b (NOT gt_a/gt_b)
+            score_a = torch.stack([f["score_a"] for f in batch]).to(device).view(-1)
+            score_b = torch.stack([f["score_b"] for f in batch]).to(device).view(-1)
 
             p1, p2 = model(a, m1, b, m2)
             loss = loss_fn(p1, p2, score_a, score_b)
@@ -550,7 +461,7 @@ def main() -> None:
 
         # Pointwise validation
         all_preds_chunks, all_labels_chunks, all_accept_chunks, all_id_chunks = [], [], [], []
-        id_key: Optional[str] = None
+        id_key = args.id_col if args.id_col in df_val.columns else None
 
         with torch.no_grad():
             unwrapped = accelerator.unwrap_model(model)
@@ -563,7 +474,6 @@ def main() -> None:
 
                 preds_g = accelerator.gather_for_metrics(logits)
                 labels_g = accelerator.gather_for_metrics(y)
-
                 all_preds_chunks.append(preds_g.cpu())
                 all_labels_chunks.append(labels_g.cpu())
 
@@ -572,16 +482,9 @@ def main() -> None:
                     acc_g = accelerator.gather_for_metrics(acc)
                     all_accept_chunks.append(acc_g.cpu())
 
-                if id_key is None:
-                    for k in ("id", "paper_id", "guid"):
-                        if k in batch[0]:
-                            id_key = k
-                            break
-                if id_key is not None:
+                if id_key is not None and id_key in batch[0]:
                     try:
-                        ids_local = torch.tensor(
-                            [int(f[id_key]) for f in batch], device=device, dtype=torch.long
-                        ).view(-1)
+                        ids_local = torch.tensor([int(f[id_key]) for f in batch], device=device, dtype=torch.long).view(-1)
                         ids_g = accelerator.gather_for_metrics(ids_local)
                         all_id_chunks.append(ids_g.cpu())
                     except Exception:
@@ -591,32 +494,20 @@ def main() -> None:
         all_preds = torch.cat(all_preds_chunks, dim=0).numpy()
         all_labels = torch.cat(all_labels_chunks, dim=0).numpy()
         all_accept = torch.cat(all_accept_chunks, dim=0).numpy().tolist() if len(all_accept_chunks) > 0 else []
-        all_ids = (
-            torch.cat(all_id_chunks, dim=0).tolist()
-            if len(all_id_chunks) > 0
-            else list(range(len(all_preds)))
-        )
+        all_ids = torch.cat(all_id_chunks, dim=0).tolist() if len(all_id_chunks) > 0 else list(range(len(all_preds)))
 
         if is_main:
-            pw_metrics = compute_regression_metrics(
-                all_preds, all_labels, np.array(all_accept) if all_accept else None
-            )
+            pw_metrics = compute_regression_metrics(all_preds, all_labels, np.array(all_accept) if all_accept else None)
             for k, v in pw_metrics.items():
                 writer.add_scalar(f"val/pointwise_{k}", v, epoch)
             logging.info(f"Pointwise Validation Metrics: {pw_metrics}")
             log_metrics_single_csv(args.runs_dir, epoch, "pointwise", pw_metrics)
-            write_val_preds_csv(
-                runs_dir=args.runs_dir,
-                epoch=epoch,
-                ids=all_ids,
-                preds=all_preds,
-                labels=all_labels,
-                accepts=(all_accept if all_accept else None),
-            )
+            write_val_preds_csv(args.runs_dir, epoch, all_ids, all_preds, all_labels, (all_accept if all_accept else None))
 
         # Pairwise validation (optional)
         if args.need_pairwise_eval:
             all_pred_diff_chunks, all_gt_diff_chunks = [], []
+
             with torch.no_grad():
                 unwrapped = accelerator.unwrap_model(model)
                 for batch in pair_val_loader:
@@ -624,8 +515,9 @@ def main() -> None:
                     m1 = torch.stack([f["attention_mask_a"] for f in batch]).to(device)
                     b = torch.stack([f["input_ids_b"] for f in batch]).to(device)
                     m2 = torch.stack([f["attention_mask_b"] for f in batch]).to(device)
-                    ga = torch.stack([f["gt_a"] for f in batch]).to(device).view(-1)
-                    gb = torch.stack([f["gt_b"] for f in batch]).to(device).view(-1)
+
+                    ga = torch.stack([f["score_a"] for f in batch]).to(device).view(-1)
+                    gb = torch.stack([f["score_b"] for f in batch]).to(device).view(-1)
 
                     pa, pb = unwrapped(a, m1, b, m2)
                     pred_diff_g = accelerator.gather_for_metrics(pa - pb)
@@ -640,9 +532,7 @@ def main() -> None:
 
                 pairwise_accuracy = float((np.sign(pred_diff) == np.sign(gt_diff)).mean())
                 violation_mask = np.sign(pred_diff) != np.sign(gt_diff)
-                violation_magnitude = float(
-                    np.abs(pred_diff[violation_mask] - gt_diff[violation_mask]).mean()
-                ) if violation_mask.any() else 0.0
+                violation_magnitude = float(np.abs(pred_diff[violation_mask] - gt_diff[violation_mask]).mean()) if violation_mask.any() else 0.0
                 pairwise_mae = float(np.mean(np.abs(pred_diff - gt_diff)))
 
                 writer.add_scalar("val/pairwise_accuracy", pairwise_accuracy, epoch)
@@ -660,11 +550,9 @@ def main() -> None:
     accelerator.wait_for_everyone()
 
     if is_main:
-        unwrapped = accelerator.unwrap_model(model).base_model
+        unwrapped_base = accelerator.unwrap_model(model).base_model
         output_dir = args.runs_dir or f"./runs/{datetime.now().strftime('%m%d%H%M')}_acc"
-        unwrapped.save_pretrained(output_dir, safe_serialization=False)
-        # Reuse tokenizer from outer scope
-        tokenizer = AutoTokenizer.from_pretrained(args.checkpoint, use_fast=True)
+        unwrapped_base.save_pretrained(output_dir, safe_serialization=False)
         tokenizer.save_pretrained(output_dir)
         logging.info(f"Model saved to {output_dir}")
 
