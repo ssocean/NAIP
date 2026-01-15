@@ -155,7 +155,7 @@ def get_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="RTS Pairwise + Pointwise training with LoRA")
 
     # Data path / cols
-    parser.add_argument("--data_path", type=str, default=r"C:\Users\Ocean\Documents\GitHub\reduct_academic\NAID_builder\datasets\dataset_heir_clusters_ward_2.2.csv")
+    parser.add_argument("--data_path", type=str, default=r"")
     parser.add_argument("--title_col", type=str, default="title")
     parser.add_argument("--abstract_col", type=str, default="abstract")
     parser.add_argument("--year_col", type=str, default="pub_year")
@@ -166,7 +166,7 @@ def get_args() -> argparse.Namespace:
     parser.add_argument("--accept_col", type=str, default="accept")
 
     # Model / Tokenization
-    parser.add_argument("--checkpoint", type=str, default=r"H:\weights\Qwen3-4B-Instruct-2507")
+    parser.add_argument("--checkpoint", type=str, default=r"")
     parser.add_argument("--num_labels", type=int, default=1)
     parser.add_argument("--max_length", type=int, default=512)
 
